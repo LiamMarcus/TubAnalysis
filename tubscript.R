@@ -48,32 +48,48 @@ q<-qcc(RimDiameter, type="xbar",title="Control Chart \n Cool Whip 8oz Undersized
 process.capability(q, spec.limits=c(-20,-10), target=-15)
 detach(dataAged)
 
-# USE THIS FOR GAUGE LATER ####################
+
+#Summarize the gauge data
+data<-myData$"Gauge"
 tbl_df(data)
+
+#Identify the factors and fix some of the units on variables
+data$Profile <- factor(data$Profile)
 
 #Clean-up of a gauge data table using tidyr
 #this call works on a table of gauge data where the locations are column headings
 #and the data are the gauge measurements.
 data <- data %>%
-    gather(location,gauge,B1:S9)
+    gather(location,gauge,B1:S9) %>%
+    select(Profile:gauge)
 
 #Next, let's change all the gauges to mils using my fixGauge function, but letting
 #dplyr's mutate verb apply the function
-
 data <- data %>%
     mutate(gauge =fixGauge(gauge))
 
-#this will put the table back into the original order using tidyr's spread()
-#data <- data %>%
-#    spread(location,gauge)
+#calulate the 1-sigma values for the plot bars
+gaugeSummary <- summaryCI(data,"gauge",c("Profile","location"))
 
-#now let's look at some trial summaries using
-data %>%
-    group_by(Profile,location) %>%
-    summarize(aveGauge = mean(gauge))
+#Prepare the data for plotting
+gaugeSummary$Upper <- gaugeSummary$mean / 2
+gaugeSummary$Lower <- 0 - gaugeSummary$Upper
+gaugeSummary$ciUpper <- gaugeSummary$ciUpper / 2
+gaugeSummary$ciLower <- 0 - gaugeSummary$ciUpper
 
-data %>%
-    group_by(Stack) %>%
-    summarize(aveGauge = mean(gauge))
+#make the plot and save the image
+xlabel="Measurement Location"
+ylabel="mils"
+plotTitle="Cool Whip 8oz Tub Gauge Distribution"
+p4<-ggplot(gaugeSummary) +
+    geom_ribbon(aes(x=location,ymin=Lower,ymax=Upper, group=1), fill="red", alpha=.4) +
+    geom_errorbar(aes(x=location,ymin=ciLower,ymax=ciUpper), colour="black", width=0.1) +
+    facet_grid(Profile ~ .) +
+    xlab(xlabel) +
+    ylab(ylabel) +
+    ggtitle(plotTitle) +
+    theme(axis.text.x = element_text(angle = 90))
 
-
+plotFile=paste("GaugeComparison.CIplot.png",    sep="")
+ggsave(p4,width=6,height=4,file=plotFile)
+p4
